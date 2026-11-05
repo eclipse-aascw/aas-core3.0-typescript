@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2023 aas-core3.0-typescript AUTHORS
+//
+// SPDX-License-Identifier: MIT
+
 /**
  * Provide de/serialization of AAS classes to/from JSON.
  *

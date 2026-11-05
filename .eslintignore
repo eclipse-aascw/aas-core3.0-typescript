@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023 aas-core3.0-typescript AUTHORS
+#
+# SPDX-License-Identifier: MIT
+
 node_modules
 dist
 dev_scripts/codegen/snippets
