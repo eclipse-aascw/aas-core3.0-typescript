@@ -45,6 +45,164 @@ def _add_license_headers(src_path: pathlib.Path) -> None:
         path.write_text(_prepend_license_header(text), encoding="utf-8")
 
 
+# NOTE (aaronzi, 2026-11-05):
+# The base64 helpers in the generated common.ts have been adapted from
+# base64-arraybuffer by Niklas von Hertzen (MIT). The pinned aas-core-codegen
+# does not mark them as a snippet yet, so we add the REUSE snippet tags and
+# the attribution ourselves. If aas-core-codegen already emits them, nothing
+# is changed. If neither the old nor the new text is found, we fail loudly
+# so that the attribution is not silently lost.
+#
+# REUSE-IgnoreStart
+_BASE64_SNIPPET_BEGIN = """\
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2012 Niklas von Hertzen
+// SPDX-License-Identifier: MIT
+//
+// The base64 character table, the lookup table and the functions base64Encode and
+// base64Decode below have been adapted from base64-arraybuffer by Niklas von Hertzen.
+// The original source code is available at:
+// https://github.com/niklasvh/base64-arraybuffer/blob/master/src/index.ts
+"""
+
+_BASE64_SNIPPET_END = "// SPDX-SnippetEnd\n"
+# REUSE-IgnoreEnd
+
+_BASE64_CHARS_PREFIX = 'const BASE64_CHARS = "'
+
+_BASE64_ENCODE_SIGNATURE = "export function base64Encode(bytes: Uint8Array): string {\n"
+
+_BASE64_DECODE_SIGNATURE = (
+    "export function base64Decode(text: string): Either<Uint8Array, string> {\n"
+)
+
+_BASE64_ENCODE_NOTE = """\
+  // NOTE (mristin):
+  // This implementation has been adapted from the encode function of
+  // base64-arraybuffer, see the snippet header above.
+"""
+
+_BASE64_DECODE_NOTE = """\
+  // NOTE (mristin):
+  // This implementation has been adapted from the decode function of
+  // base64-arraybuffer and extended with input validation, see the snippet header
+  // above.
+"""
+
+# NOTE (aaronzi, 2026-11-05):
+# Older aas-core-codegen revisions put a date in the note, newer ones do not.
+_OLD_BASE64_NOTE_RE_PART = r"  // NOTE \(mristin(?:, \d{4}-\d{2}-\d{2})?\):\n" + re.escape(
+    """\
+  // This implementation is vaguely based on:
+  // https://github.com/danguer/blog-examples/blob/master/js/base64-binary.js,
+  // https://github.com/niklasvh/base64-arraybuffer/blob/master/src/index.ts and
+  // https://github.com/beatgammit/base64-js/blob/master/index.js.
+"""
+)
+
+
+def _replace_base64_note(text: str, signature: str, new_note: str) -> str:
+    """Replace the old provenance note directly below ``signature`` with ``new_note``."""
+    if signature + new_note in text:
+        return text
+
+    pattern = re.compile(re.escape(signature) + _OLD_BASE64_NOTE_RE_PART)
+    text, count = pattern.subn(lambda _: signature + new_note, text)
+    if count != 1:
+        raise RuntimeError(
+            f"Expected exactly one old or new base64 note below {signature.strip()!r} "
+            f"in the generated common.ts, but found {count} old and no new one"
+        )
+
+    return text
+
+
+def _attribute_base64_snippet(text: str) -> str:
+    """
+    Mark the base64 helpers in the generated ``common.ts`` as a REUSE snippet.
+
+    >>> old = (
+    ...     "}\\n\\n" + _BASE64_CHARS_PREFIX + 'ABC";\\n\\n'
+    ...     + _BASE64_ENCODE_SIGNATURE
+    ...     + "  // NOTE (mristin, 2022-11-25):\\n"
+    ...     + "  // This implementation is vaguely based on:\\n"
+    ...     + "  // https://github.com/danguer/blog-examples/blob/master/js/base64-binary.js,\\n"
+    ...     + "  // https://github.com/niklasvh/base64-arraybuffer/blob/master/src/index.ts and\\n"
+    ...     + "  // https://github.com/beatgammit/base64-js/blob/master/index.js.\\n"
+    ...     + "}\\n\\n"
+    ...     + _BASE64_DECODE_SIGNATURE
+    ...     + "  // NOTE (mristin):\\n"
+    ...     + "  // This implementation is vaguely based on:\\n"
+    ...     + "  // https://github.com/danguer/blog-examples/blob/master/js/base64-binary.js,\\n"
+    ...     + "  // https://github.com/niklasvh/base64-arraybuffer/blob/master/src/index.ts and\\n"
+    ...     + "  // https://github.com/beatgammit/base64-js/blob/master/index.js.\\n"
+    ...     + "  if (x) {\\n    return;\\n  }\\n"
+    ...     + "}\\n\\nfoo();\\n"
+    ... )
+    >>> new = _attribute_base64_snippet(old)
+    >>> new == (
+    ...     "}\\n\\n" + _BASE64_SNIPPET_BEGIN + _BASE64_CHARS_PREFIX + 'ABC";\\n\\n'
+    ...     + _BASE64_ENCODE_SIGNATURE + _BASE64_ENCODE_NOTE
+    ...     + "}\\n\\n"
+    ...     + _BASE64_DECODE_SIGNATURE + _BASE64_DECODE_NOTE
+    ...     + "  if (x) {\\n    return;\\n  }\\n"
+    ...     + "}\\n" + _BASE64_SNIPPET_END + "\\nfoo();\\n"
+    ... )
+    True
+    >>> _attribute_base64_snippet(new) == new
+    True
+    >>> _attribute_base64_snippet("something else")
+    Traceback (most recent call last):
+    ...
+    RuntimeError: Expected the base64 character table in the generated common.ts
+    """
+    # Snippet begin
+    if _BASE64_SNIPPET_BEGIN + _BASE64_CHARS_PREFIX not in text:
+        if (
+            "SPDX-SnippetBegin" in text
+            or text.count("\n\n" + _BASE64_CHARS_PREFIX) != 1
+        ):
+            raise RuntimeError(
+                "Expected the base64 character table in the generated common.ts"
+            )
+
+        text = text.replace(
+            "\n\n" + _BASE64_CHARS_PREFIX,
+            "\n\n" + _BASE64_SNIPPET_BEGIN + _BASE64_CHARS_PREFIX,
+        )
+
+    # Notes in the functions
+    text = _replace_base64_note(text, _BASE64_ENCODE_SIGNATURE, _BASE64_ENCODE_NOTE)
+    text = _replace_base64_note(text, _BASE64_DECODE_SIGNATURE, _BASE64_DECODE_NOTE)
+
+    # Snippet end, directly after the closing brace of base64Decode
+    decode_start = text.find(_BASE64_DECODE_SIGNATURE)
+    decode_end = text.find("\n}\n", decode_start)
+    if decode_start == -1 or decode_end == -1:
+        raise RuntimeError(
+            "Expected the function base64Decode in the generated common.ts"
+        )
+    decode_end += len("\n}\n")
+
+    if not text.startswith(_BASE64_SNIPPET_END, decode_end):
+        if "SPDX-SnippetEnd" in text:
+            raise RuntimeError(
+                "Expected SPDX-SnippetEnd directly after base64Decode "
+                "in the generated common.ts"
+            )
+
+        text = text[:decode_end] + _BASE64_SNIPPET_END + text[decode_end:]
+
+    return text
+
+
+def _attribute_snippets(src_path: pathlib.Path) -> None:
+    """Add the REUSE snippet tags to the code taken from other projects."""
+    path = src_path / "common.ts"
+    text = path.read_text(encoding="utf-8")
+    path.write_text(_attribute_base64_snippet(text), encoding="utf-8")
+
+
 def _generate_sdk(
     meta_model_path: pathlib.Path,
     snippet_path: pathlib.Path,
@@ -66,6 +224,7 @@ def _generate_sdk(
     )
 
     _add_license_headers(sdk_path / "src")
+    _attribute_snippets(sdk_path / "src")
 
 
 def main() -> int:
