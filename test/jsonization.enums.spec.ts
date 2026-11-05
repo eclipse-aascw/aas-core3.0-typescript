@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2023 aas-core3.0-typescript AUTHORS
+//
+// SPDX-License-Identifier: MIT
+
 /**
  * Test JSON de/serialization of enumeration literals.
  */

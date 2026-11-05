@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2023 aas-core3.0-typescript AUTHORS
+//
+// SPDX-License-Identifier: MIT
+
 const sharedPresets = ['@babel/typescript'];
 const shared = {
   ignore: ['src/**/*.spec.ts'],
